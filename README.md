@@ -25,6 +25,7 @@ Key concepts:
 - **NumPy**
 - **Matplotlib**
 - (Optional) **Pandas** for future data extensions
+```python import pandas as pd df = pd.read_csv("data.csv") print(df.head()) ```
 
 📚 References
 Harry Markowitz - Portfolio Selection (1952)
