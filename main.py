@@ -1,66 +1,69 @@
 import numpy as np
 import matplotlib.pyplot as plt
-from scipy.optimize import minimize
+# from scipy.optimize import minimize
+from get_data import get_daily_returns_for_multiple_tickers
 # Simulate daily returns for a portfolio of assets
 n_assets = 15
 n_days = 252
 
+tickers = [
+    "AAPL", "MSFT", 
+    "GOOGL", "AMZN", "NVDA"
+    # , "META", "TSLA", "BRK-B", "JPM", "V",
+    # "SPY", "QQQ", "VTI", "ARKK", "DIA", "XOM", "CVX", "BA", "CAT", "GE",
+    # "JNJ", "PFE", "UNH", "TSM", "NFLX", "INTC", "AMD", "CRM", "NKE", "WMT"
+]
 np.random.seed(42)  # for reproducibility
-mean_returns = np.random.uniform(0.001, 0.02, n_assets)
-std_devs = np.random.uniform(0.005, 0.03, n_assets)
 
-# Simulate daily returns
-returns = np.stack([
-    np.random.normal(loc=mean_returns[i], scale=std_devs[i], size=n_days)
-    for i in range(n_assets)
-], axis=1)
 
+# Fetch daily returns for the specified tickers
+returns = get_daily_returns_for_multiple_tickers(tickers, start="2024-12-01", end="2025-01-01")
+# print(returns)
+# print(returns.shape)
 mean_daily_returns = np.mean(returns, axis=0)
+# print(mean_daily_returns)
 cov_matrix = np.cov(returns, rowvar=False)
-
-# Optimization function
+print("Size of Covariance Matrix: ",cov_matrix.shape)
 def portfolio_variance(weights, cov_matrix):
     return np.dot(weights.T, np.dot(cov_matrix, weights))
 
-# Constraints and bounds
-def optimize_portfolio(target_return, mean_returns, cov_matrix):
-    n = len(mean_returns)
-    init_guess = np.ones(n) / n
-    bounds = tuple((0, 1) for _ in range(n))
+def random_weights_portfolio(mean_returns, cov_matrix):
+    weights = np.random.rand(len(tickers))
+    weights /= np.sum(weights)  # Normalize to sum to 1
 
-    constraints = (
-        {'type': 'eq', 'fun': lambda w: np.sum(w) - 1},  # sum of weights = 1
-        {'type': 'eq', 'fun': lambda w: np.dot(w, mean_returns) - target_return}  # target return
-    )
+    # Calculate portfolio return
+    portfolio_return = np.dot(weights, mean_returns)
 
-    result = minimize(portfolio_variance, init_guess, args=(cov_matrix,),
-                      method='SLSQP', bounds=bounds, constraints=constraints)
+    # Calculate portfolio risk (standard deviation)
+    portfolio_risk = np.sqrt(portfolio_variance(weights, cov_matrix))
+    return portfolio_return, portfolio_risk, weights
 
-    return result
+# Generate random portfolios
+n_portfolios = 100
+portfolios = [random_weights_portfolio(mean_daily_returns, cov_matrix) for _ in range(n_portfolios)]
 
-# Build frontier
-target_returns = np.linspace(min(mean_daily_returns), max(mean_daily_returns), 100)
-frontier_returns = []
-frontier_risks = []
-frontier_weights = []
+# Extract returns, risks, and weights from portfolios
+frontier_returns = [p[0] for p in portfolios]
+frontier_risks = [p[1] for p in portfolios]
+frontier_weights = [p[2] for p in portfolios]
 
-for target in target_returns:
-    result = optimize_portfolio(target, mean_daily_returns, cov_matrix)
-    if result.success:
-        risk = np.sqrt(result.fun)
-        frontier_returns.append(target)
-        frontier_risks.append(risk)
-        frontier_weights.append(result.x)
-    else:
-        # Optimization failed — skip this point
-        continue
+
+# print(frontier_weights)
+# Convert to numpy arrays
+risks = np.array(frontier_risks)
+returns_ = np.array(frontier_returns)
+
+# Sort both based on increasing risk
+sorted_indices = np.argsort(risks)
+risks = risks[sorted_indices]
+returns_ = returns_[sorted_indices]
 
 # Plotting
 plt.figure(figsize=(10, 6))
-plt.plot(frontier_risks, frontier_returns, color='red', linewidth=2, label='Efficient Frontier')
+plt.plot(risks, returns_, 'r-', linewidth=2, label='Efficient Frontier')
 plt.xlabel('Risk (Standard Deviation)')
 plt.ylabel('Expected Return')
-plt.title(f'Optimized Markowitz Efficient Frontier for {n_assets} Assets')
+plt.title(f'Optimized Markowitz Efficient Frontier for {len(tickers)} Assets')
 plt.grid(True)
 plt.legend()
 plt.show()
